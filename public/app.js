@@ -1,10 +1,9 @@
 'use strict';
-const $=s=>document.querySelector(s),KEY='primorje-codes',stat={confirmed:'potvrđena',cancelled:'otkazana',completed:'završena'};
+const $=s=>document.querySelector(s),stat={confirmed:'Potvrđena',cancelled:'Otkazana',completed:'Završena'};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=d=>new Date(d).toLocaleDateString('sr-Latn-ME'),days=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5)+1;
-const codes=()=>{try{return JSON.parse(localStorage.getItem(KEY))||[]}catch{return[]}},setCodes=c=>{try{localStorage.setItem(KEY,JSON.stringify(c))}catch{}};
-async function api(u,o){const r=await fetch(u,o),d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Greška na serveru.'),{status:r.status});return d}
-let CARS=[],pick=null;
+async function api(u,o={}){if(o.body){o.body=JSON.stringify(o.body);o.headers={'Content-Type':'application/json'}}const r=await fetch(u,o),d=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(d.error||'Greška na serveru.'),{status:r.status});return d}
+let CARS=[],pick=null,USER=null,mode='login',after=null;
 $('#from').min=$('#to').min=new Date().toISOString().slice(0,10);
 const valid=()=>{const f=$('#from').value,t=$('#to').value;return f&&t&&t>=f?{f,t,n:days(f,t)}:null};
 async function loadCars(){const r=valid();try{CARS=await api('/api/cars'+(r?`?from=${r.f}&to=${r.t}`:''))}catch(e){$('#grid').innerHTML=`<p class="err">${esc(e.message)}</p>`;return}render()}
@@ -15,26 +14,43 @@ function render(){
   const cat=$('#f-cat').value,tr=$('#f-tr').value,max=+$('#f-price').value,r=valid();$('#f-out').textContent=max+' €';
   $('#range-msg').textContent=r?`${r.n} ${r.n===1?'dan':'dana'}: ${fmt(r.f)} – ${fmt(r.t)}`:'Izaberite datume da vidite slobodna vozila i ukupnu cijenu.';
   const list=CARS.filter(c=>(!cat||c.cat===cat)&&(!tr||c.tr===tr)&&c.price<=max);
-  $('#grid').innerHTML=list.length?list.map(c=>`<article class="car ${c.busy?'busy':''}">${svg(c.color)}<h3>${esc(c.name)}</h3><div class="meta">${esc(c.cat)} · ${esc(c.tr)} · ${c.seats} sjedišta · ${esc(c.fuel)}</div>
-    <div class="foot"><div class="price">${c.price} €<small> / dan</small>${r?`<div class="meta">Ukupno ${c.price*r.n} €</div>`:''}</div>${c.busy?'<span class="tag">Zauzeto u izabranom periodu</span>':`<button class="btn" data-id="${c.id}">Rezerviši</button>`}</div></article>`).join('')
+  $('#grid').innerHTML=list.length?list.map(c=>`<article class="car ${c.busy?'busy':''}"><div class="pic">${c.photos.length?`<img class="ph" src="/api/photos/${c.photos[0]}" alt="${esc(c.name)}" loading="lazy">`:svg(c.color)}</div>
+    ${c.photos.length>1?`<div class="ths">${c.photos.map((p,i)=>`<button class="th" data-src="${p}" aria-label="Fotografija ${i+1}"><img src="/api/photos/${p}" alt="" loading="lazy"></button>`).join('')}</div>`:''}
+    <div class="cb"><h3>${esc(c.name)}</h3><div class="meta">${esc(c.cat)} · ${esc(c.tr)} · ${c.seats} sjedišta · ${esc(c.fuel)}</div>
+    <div class="foot"><div class="price">${c.price} €<small> / dan</small>${r?`<div class="meta">Ukupno ${c.price*r.n} €</div>`:''}</div>${c.busy?'<span class="tag">Zauzeto u izabranom periodu</span>':`<button class="btn" data-id="${c.id}">Rezerviši</button>`}</div></div></article>`).join('')
     :'<p>Nijedno vozilo ne odgovara filterima. Povećajte maksimalnu cijenu ili promijenite kategoriju.</p>';
 }
 ['#f-cat','#f-tr','#f-price'].forEach(s=>$(s).addEventListener('input',render));
 $('#search').addEventListener('submit',e=>{e.preventDefault();loadCars();$('#flota').scrollIntoView({behavior:'smooth'})});
-$('#grid').addEventListener('click',e=>{const id=e.target.dataset.id;if(!id)return;const r=valid();
-  if(!r){$('#range-msg').textContent='Prvo izaberite datume preuzimanja i vraćanja.';$('#from').focus();return}
-  pick=CARS.find(c=>c.id==id);$('#d-title').textContent=pick.name;
-  $('#d-sum').textContent=`${fmt(r.f)} – ${fmt(r.t)}, ${r.n} ${r.n===1?'dan':'dana'}, ${$('#loc').value}. Ukupno ${pick.price*r.n} €.`;$('#d-err').textContent='';$('#dlg').showModal()});
+function openBook(id){const r=valid();pick=CARS.find(c=>c.id==id);if(!pick||!r)return;$('#d-title').textContent=pick.name;
+  $('#d-sum').textContent=`${fmt(r.f)} – ${fmt(r.t)}, ${r.n} ${r.n===1?'dan':'dana'}, ${$('#loc').value}. Ukupno ${pick.price*r.n} €. Rezervacija je na ime ${USER.name}.`;$('#d-err').textContent='';$('#dlg').showModal()}
+$('#grid').addEventListener('click',e=>{const th=e.target.closest('.th');
+  if(th){th.closest('.car').querySelector('.ph').src='/api/photos/'+th.dataset.src;return}
+  const id=e.target.dataset.id;if(!id)return;
+  if(!valid()){$('#range-msg').textContent='Prvo izaberite datume preuzimanja i vraćanja.';$('#from').focus();return}
+  if(!USER){after=()=>openBook(id);openAuth('login','Prijavite se ili napravite nalog da biste rezervisali.');return}
+  openBook(id)});
 $('#d-cancel').addEventListener('click',()=>$('#dlg').close());
-$('#book').addEventListener('submit',async e=>{e.preventDefault();const r=valid(),fd=new FormData(e.target);if(!r||!pick)return;
-  try{const b=await api('/api/bookings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({car_id:pick.id,from:r.f,to:r.t,loc:$('#loc').value,name:fd.get('name'),email:fd.get('email'),phone:fd.get('phone')})});
-    setCodes([...codes(),b.code]);$('#dlg').close();e.target.reset();await loadCars();await renderBookings();$('#rezervacije').scrollIntoView({behavior:'smooth'})}
-  catch(x){$('#d-err').textContent=x.message;if(x.status===409)loadCars()}});
-async function renderBookings(){
-  const all=codes(),list=await Promise.all(all.map(c=>api('/api/bookings/'+c).catch(e=>e.status===404?null:undefined)));
-  const keep=all.filter((c,i)=>list[i]!==null);if(keep.length!==all.length)setCodes(keep);
-  const rows=list.filter(Boolean);
-  $('#bookings').innerHTML=rows.length?rows.map(b=>`<div class="bk"><div><strong>${esc(b.car)}</strong> · šifra ${esc(b.code)}<br>${fmt(b.from)} – ${fmt(b.to)}, ${esc(b.loc)}<br>${esc(b.name)}, ${stat[b.status]||''}</div><div>${b.total} € ${b.status==='confirmed'?`<button data-del="${esc(b.code)}">Otkaži</button>`:''}</div></div>`).join(''):'<p>Nemate rezervacija. Izaberite datume i vozilo da počnete.</p>';
-}
-$('#bookings').addEventListener('click',async e=>{const c=e.target.dataset.del;if(!c)return;try{await api('/api/bookings/'+c,{method:'DELETE'})}catch{}await loadCars();renderBookings()});
-loadCars();renderBookings();
+$('#book').addEventListener('submit',async e=>{e.preventDefault();const r=valid();if(!r||!pick)return;
+  try{await api('/api/bookings',{method:'POST',body:{car_id:pick.id,from:r.f,to:r.t,loc:$('#loc').value,phone:new FormData(e.target).get('phone')}});
+    $('#dlg').close();e.target.reset();await loadCars();await renderBookings();$('#rezervacije').scrollIntoView({behavior:'smooth'})}
+  catch(x){$('#d-err').textContent=x.message;if(x.status===409)loadCars();if(x.status===401){USER=null;drawAuth()}}});
+function drawAuth(){$('#auth').innerHTML=USER?`<span class="hi">${esc(USER.name.split(' ')[0])}</span><button class="btn ghost" id="b-out">Odjava</button>`:'<button class="btn ghost" id="b-in">Prijava</button><button class="btn" id="b-reg">Registracija</button>'}
+function openAuth(m,hint=''){mode=m;const reg=m==='register',f=$('#aform');
+  $('#a-title').textContent=reg?'Registracija':'Prijava';$('#a-hint').textContent=hint;$('#l-name').hidden=!reg;f.name.required=reg;
+  f.password.autocomplete=reg?'new-password':'current-password';$('#a-ok').textContent=reg?'Napravi nalog':'Prijavi se';
+  $('#a-switch').textContent=reg?'Već imam nalog':'Nemam nalog';$('#a-err').textContent='';$('#adlg').showModal()}
+$('#auth').addEventListener('click',async e=>{
+  if(e.target.id==='b-in')openAuth('login');else if(e.target.id==='b-reg')openAuth('register');
+  else if(e.target.id==='b-out'){await api('/api/logout',{method:'POST'});USER=null;drawAuth();renderBookings()}});
+$('#a-switch').addEventListener('click',()=>openAuth(mode==='login'?'register':'login',$('#a-hint').textContent));
+$('#a-close').addEventListener('click',()=>{after=null;$('#adlg').close()});
+$('#aform').addEventListener('submit',async e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+  try{USER=await api('/api/'+mode,{method:'POST',body:f});e.target.reset();$('#adlg').close();drawAuth();await renderBookings();if(after){const a=after;after=null;a()}}
+  catch(x){$('#a-err').textContent=x.message}});
+async function renderBookings(){const el=$('#bookings');
+  if(!USER){el.innerHTML='<p>Prijavite se da vidite svoje rezervacije.</p>';return}
+  let rows=[];try{rows=await api('/api/my-bookings')}catch{}
+  el.innerHTML=rows.length?rows.map(b=>`<div class="bk"><div><strong>${esc(b.car)}</strong> · šifra ${esc(b.code)}<br>${fmt(b.from)} – ${fmt(b.to)}, ${esc(b.loc)}<br>${stat[b.status]||''}</div><div>${b.total} € ${b.status==='confirmed'?`<button class="lnk" data-del="${b.id}">Otkaži</button>`:''}</div></div>`).join(''):'<p>Nemate rezervacija. Izaberite datume i vozilo da počnete.</p>'}
+$('#bookings').addEventListener('click',async e=>{const id=e.target.dataset.del;if(!id)return;try{await api('/api/my-bookings/'+id,{method:'DELETE'})}catch{}await loadCars();renderBookings()});
+(async()=>{try{USER=(await api('/api/me')).user}catch{}drawAuth();loadCars();renderBookings()})();

@@ -1,51 +1,73 @@
-const express=require('express'),{DatabaseSync}=require('node:sqlite'),crypto=require('crypto'),path=require('path');
+const express=require('express'),{DatabaseSync}=require('node:sqlite'),crypto=require('crypto'),path=require('path'),multer=require('multer');
 const db=new DatabaseSync(process.env.DB_PATH||path.join(__dirname,'rentacar.db'));
-db.exec('PRAGMA journal_mode = WAL;PRAGMA foreign_keys = ON;');
-db.exec(`CREATE TABLE IF NOT EXISTS cars(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,cat TEXT NOT NULL,tr TEXT NOT NULL,seats INTEGER NOT NULL,fuel TEXT NOT NULL,price REAL NOT NULL,color TEXT NOT NULL DEFAULT '#0e5a8a',active INTEGER NOT NULL DEFAULT 1);
+db.exec(`PRAGMA journal_mode=WAL;PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS cars(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,cat TEXT NOT NULL,tr TEXT NOT NULL,seats INTEGER NOT NULL,fuel TEXT NOT NULL,price REAL NOT NULL,color TEXT NOT NULL DEFAULT '#0a2540',active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS bookings(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT UNIQUE NOT NULL,car_id INTEGER NOT NULL REFERENCES cars(id),from_date TEXT NOT NULL,to_date TEXT NOT NULL,loc TEXT NOT NULL,total REAL NOT NULL,name TEXT NOT NULL,email TEXT NOT NULL,phone TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'confirmed',created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,salt TEXT NOT NULL,hash TEXT NOT NULL,created TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS car_photos(id INTEGER PRIMARY KEY AUTOINCREMENT,car_id INTEGER NOT NULL REFERENCES cars(id) ON DELETE CASCADE,mime TEXT NOT NULL,data BLOB NOT NULL);
 CREATE INDEX IF NOT EXISTS ix_b ON bookings(car_id,from_date,to_date)`);
+if(!db.prepare("SELECT 1 FROM pragma_table_info('bookings') WHERE name='user_id'").get())db.exec('ALTER TABLE bookings ADD COLUMN user_id INTEGER');
 if(!db.prepare('SELECT COUNT(*) n FROM cars').get().n){const i=db.prepare('INSERT INTO cars(name,cat,tr,seats,fuel,price,color) VALUES(?,?,?,?,?,?,?)');
-[['Fiat Panda','Ekonomik','Manuelni',4,'Benzin',24,'#e8a33d'],['Škoda Fabia','Ekonomik','Manuelni',5,'Benzin',28,'#6a8fa8'],['VW Golf 8','Kompakt','Automatik',5,'Dizel',45,'#2f3a46'],['Peugeot 308','Kompakt','Manuelni',5,'Dizel',38,'#a4281f'],['Dacia Duster','SUV','Manuelni',5,'Dizel',52,'#6b7a4f'],['Toyota RAV4 Hybrid','SUV','Automatik',5,'Hibrid',78,'#c9cfcb'],['BMW 320d','Premium','Automatik',5,'Dizel',95,'#0e5a8a'],['Mercedes C 220','Premium','Automatik',5,'Dizel',110,'#13202b']].forEach(c=>i.run(...c))}
+[['Fiat Panda','Ekonomik','Manuelni',4,'Benzin',24,'#e8a33d'],['Škoda Fabia','Ekonomik','Manuelni',5,'Benzin',28,'#6a8fa8'],['VW Golf 8','Kompakt','Automatik',5,'Dizel',45,'#2f3a46'],['Peugeot 308','Kompakt','Manuelni',5,'Dizel',38,'#a4281f'],['Dacia Duster','SUV','Manuelni',5,'Dizel',52,'#6b7a4f'],['Toyota RAV4 Hybrid','SUV','Automatik',5,'Hibrid',78,'#c9cfcb'],['BMW 320d','Premium','Automatik',5,'Dizel',95,'#0a2540'],['Mercedes C 220','Premium','Automatik',5,'Dizel',110,'#13202b']].forEach(c=>i.run(...c))}
 const PASS=process.env.ADMIN_PASSWORD||(()=>{const p=crypto.randomBytes(6).toString('hex');console.log('ADMIN_PASSWORD nije postavljen. Privremena lozinka:',p);return p})();
 const SECRET=process.env.SECRET||crypto.randomBytes(32).toString('hex');
 const h=s=>crypto.createHash('sha256').update(s).digest(),sign=b=>crypto.createHmac('sha256',SECRET).update(b).digest('hex');
-const mk=()=>{const e=Date.now()+8*36e5;return e+'.'+sign(String(e))};
-const ok=t=>{try{const [e,s]=String(t).split('.');return !!e&&Date.now()<+e&&crypto.timingSafeEqual(Buffer.from(s),Buffer.from(sign(e)))}catch{return false}};
-const app=express();app.set('trust proxy',1);app.use(express.json({limit:'20kb'}));
-app.use(express.static(path.join(__dirname,'public')));
-const bad=(r,m,c=400)=>r.status(c).json({error:m}),DATE=/^\d{4}-\d{2}-\d{2}$/,nd=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5)+1;
+const mk=(k,id,hrs)=>{const b=`${k}-${id}-${Date.now()+hrs*36e5}`;return b+'.'+sign(b)};
+const chk=t=>{try{const[b,s]=String(t).split('.'),[k,id,e]=b.split('-');return Date.now()<+e&&crypto.timingSafeEqual(Buffer.from(s),Buffer.from(sign(b)))?{k,id:+id}:null}catch{return null}};
+const pwh=(p,salt)=>crypto.scryptSync(p,salt,64).toString('hex');
+const tries=new Map(),blocked=(k,m)=>{const f=tries.get(k);return !!f&&Date.now()-f.t<9e5&&f.n>=m},fail=k=>{const f=tries.get(k);tries.set(k,f&&Date.now()-f.t<9e5?{n:f.n+1,t:f.t}:{n:1,t:Date.now()})};
+const app=express();app.set('trust proxy',1);
+app.use((q,r,n)=>{r.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'"});n()});
+app.use(express.json({limit:'20kb'}));app.use(express.static(path.join(__dirname,'public')));
+const bad=(r,m,c=400)=>r.status(c).json({error:m}),DATE=/^\d{4}-\d{2}-\d{2}$/,nd=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5)+1,s=(v,m)=>String(v||'').trim().slice(0,m);
 const taken=(car,f,t,x=0)=>db.prepare("SELECT 1 FROM bookings WHERE car_id=? AND status!='cancelled' AND id!=? AND NOT(to_date<? OR from_date>?)").get(car,x,f,t);
+const photoMap=()=>{const m={};for(const p of db.prepare('SELECT id,car_id FROM car_photos ORDER BY id').all())(m[p.car_id]??=[]).push(p.id);return m};
 const BK='SELECT b.*,c.name car_name FROM bookings b JOIN cars c ON c.id=b.car_id';
-const pub=b=>({code:b.code,car:b.car_name,from:b.from_date,to:b.to_date,loc:b.loc,total:b.total,status:b.status,name:b.name});
-app.get('/api/cars',(q,r)=>{const{from,to}=q.query,k=DATE.test(from)&&DATE.test(to)&&to>=from;
- r.json(db.prepare('SELECT * FROM cars WHERE active=1 ORDER BY price').all().map(c=>({...c,busy:k?!!taken(c.id,from,to):false})))});
-app.post('/api/bookings',(q,r)=>{const b=q.body||{},s=(v,m)=>String(v||'').trim().slice(0,m);
- const name=s(b.name,80),email=s(b.email,120),phone=s(b.phone,30),loc=s(b.loc,60);
- if(!name||!/^\S+@\S+\.\S+$/.test(email)||phone.length<6||!loc)return bad(r,'Provjerite ime, email i telefon.');
+const pub=b=>({id:b.id,code:b.code,car:b.car_name,from:b.from_date,to:b.to_date,loc:b.loc,total:b.total,status:b.status});
+const cookie=q=>Object.fromEntries((q.get('cookie')||'').split(';').map(c=>c.trim().split('=')).filter(a=>a[0]));
+const me=q=>{const t=chk(cookie(q).iki);return t&&t.k==='u'?db.prepare('SELECT id,name,email FROM users WHERE id=?').get(t.id)||null:null};
+const sess=(q,r,id)=>r.set('Set-Cookie',`iki=${mk('u',id,720)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${30*86400}${q.secure?'; Secure':''}`);
+const needUser=(q,r,n)=>{const u=me(q);if(!u)return bad(r,'Prijavite se da biste nastavili.',401);q.user=u;n()};
+app.post('/api/register',(q,r)=>{const k='reg'+q.ip;if(blocked(k,10))return bad(r,'Previše pokušaja. Pokušajte kasnije.',429);fail(k);
+ const b=q.body||{},name=s(b.name,80),email=s(b.email,120).toLowerCase(),pw=String(b.password||'');
+ if(!name||!/^\S+@\S+\.\S+$/.test(email))return bad(r,'Unesite ispravno ime i email.');
+ if(pw.length<8||pw.length>100)return bad(r,'Lozinka mora imati najmanje 8 znakova.');
+ if(db.prepare('SELECT 1 FROM users WHERE email=?').get(email))return bad(r,'Nalog sa ovim emailom već postoji. Prijavite se.',409);
+ const salt=crypto.randomBytes(16).toString('hex'),id=Number(db.prepare('INSERT INTO users(name,email,salt,hash) VALUES(?,?,?,?)').run(name,email,salt,pwh(pw,salt)).lastInsertRowid);
+ sess(q,r,id);r.status(201).json({id,name,email})});
+app.post('/api/login',(q,r)=>{const k='log'+q.ip;if(blocked(k,8))return bad(r,'Previše pokušaja. Pokušajte kasnije.',429);
+ const email=s(q.body?.email,120).toLowerCase(),u=db.prepare('SELECT * FROM users WHERE email=?').get(email),salt=u?.salt||'0'.repeat(32),hx=pwh(String(q.body?.password||'').slice(0,100),salt);
+ if(!u||!crypto.timingSafeEqual(Buffer.from(hx),Buffer.from(u.hash))){fail(k);return bad(r,'Pogrešan email ili lozinka.',401)}
+ sess(q,r,u.id);r.json({id:u.id,name:u.name,email:u.email})});
+app.post('/api/logout',(q,r)=>{r.set('Set-Cookie','iki=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0');r.json({ok:true})});
+app.get('/api/me',(q,r)=>r.json({user:me(q)}));
+app.get('/api/cars',(q,r)=>{const{from,to}=q.query,k=DATE.test(from)&&DATE.test(to)&&to>=from,pm=photoMap();
+ r.json(db.prepare('SELECT * FROM cars WHERE active=1 ORDER BY price').all().map(c=>({...c,photos:pm[c.id]||[],busy:k?!!taken(c.id,from,to):false})))});
+app.get('/api/photos/:id',(q,r)=>{const p=db.prepare('SELECT mime,data FROM car_photos WHERE id=?').get(+q.params.id);if(!p)return r.sendStatus(404);r.set({'Content-Type':p.mime,'Cache-Control':'public, max-age=86400'}).send(Buffer.from(p.data))});
+app.post('/api/bookings',needUser,(q,r)=>{const b=q.body||{},phone=s(b.phone,30),loc=s(b.loc,60);
+ if(phone.length<6||!loc)return bad(r,'Unesite ispravan broj telefona.');
  if(!DATE.test(b.from)||!DATE.test(b.to)||b.to<b.from||b.from<new Date().toISOString().slice(0,10))return bad(r,'Datumi nisu ispravni.');
  const car=db.prepare('SELECT * FROM cars WHERE id=? AND active=1').get(+b.car_id);if(!car)return bad(r,'Vozilo nije dostupno.',404);
  const code=crypto.randomBytes(4).toString('hex').toUpperCase();
  try{db.exec('BEGIN IMMEDIATE');try{if(taken(car.id,b.from,b.to))throw new Error('busy');
-  db.prepare('INSERT INTO bookings(code,car_id,from_date,to_date,loc,total,name,email,phone) VALUES(?,?,?,?,?,?,?,?,?)').run(code,car.id,b.from,b.to,loc,car.price*nd(b.from,b.to),name,email,phone);db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}}
+  db.prepare('INSERT INTO bookings(code,car_id,from_date,to_date,loc,total,name,email,phone,user_id) VALUES(?,?,?,?,?,?,?,?,?,?)').run(code,car.id,b.from,b.to,loc,car.price*nd(b.from,b.to),q.user.name,q.user.email,phone,q.user.id);db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}}
  catch(e){return e.message==='busy'?bad(r,'Vozilo je zauzeto u izabranom periodu.',409):bad(r,'Greška na serveru.',500)}
  r.status(201).json(pub(db.prepare(BK+' WHERE code=?').get(code)))});
-app.get('/api/bookings/:code',(q,r)=>{const b=db.prepare(BK+' WHERE code=?').get(q.params.code);b?r.json(pub(b)):bad(r,'Nije pronađeno.',404)});
-app.delete('/api/bookings/:code',(q,r)=>{const n=db.prepare("UPDATE bookings SET status='cancelled' WHERE code=? AND status='confirmed'").run(q.params.code).changes;n?r.json({ok:true}):bad(r,'Rezervaciju nije moguće otkazati.',404)});
-const fails=new Map();
-app.post('/api/admin/login',(q,r)=>{let f=fails.get(q.ip)||{n:0,t:0};if(Date.now()-f.t>9e5)f={n:0,t:0};
- if(f.n>=5)return bad(r,'Previše pokušaja. Pokušajte kasnije.',429);
- if(!crypto.timingSafeEqual(h(String(q.body?.password||'')),h(PASS))){fails.set(q.ip,{n:f.n+1,t:Date.now()});return bad(r,'Pogrešna lozinka.',401)}
- fails.delete(q.ip);r.json({token:mk()})});
-app.use('/api/admin',(q,r,n)=>ok((q.get('authorization')||'').replace('Bearer ',''))?n():bad(r,'Neovlašćen pristup.',401));
+app.get('/api/my-bookings',needUser,(q,r)=>r.json(db.prepare(BK+' WHERE b.user_id=? ORDER BY b.from_date DESC').all(q.user.id).map(pub)));
+app.delete('/api/my-bookings/:id',needUser,(q,r)=>{const n=db.prepare("UPDATE bookings SET status='cancelled' WHERE id=? AND user_id=? AND status='confirmed'").run(+q.params.id,q.user.id).changes;n?r.json({ok:true}):bad(r,'Rezervaciju nije moguće otkazati.',404)});
+app.post('/api/admin/login',(q,r)=>{const k='adm'+q.ip;if(blocked(k,5))return bad(r,'Previše pokušaja. Pokušajte kasnije.',429);
+ if(!crypto.timingSafeEqual(h(String(q.body?.password||'')),h(PASS))){fail(k);return bad(r,'Pogrešna lozinka.',401)}
+ tries.delete(k);r.json({token:mk('a',0,8)})});
+app.use('/api/admin',(q,r,n)=>chk((q.get('authorization')||'').replace('Bearer ',''))?.k==='a'?n():bad(r,'Neovlašćen pristup.',401));
 app.get('/api/admin/bookings',(q,r)=>r.json(db.prepare(BK+' ORDER BY b.from_date DESC').all()));
 app.patch('/api/admin/bookings/:id',(q,r)=>{const st=q.body?.status;if(!['confirmed','cancelled','completed'].includes(st))return bad(r,'Nepoznat status.');
  const b=db.prepare('SELECT * FROM bookings WHERE id=?').get(+q.params.id);if(!b)return bad(r,'Nije pronađeno.',404);
  if(st!=='cancelled'&&taken(b.car_id,b.from_date,b.to_date,b.id))return bad(r,'Termin se preklapa sa drugom rezervacijom.',409);
  db.prepare('UPDATE bookings SET status=? WHERE id=?').run(st,b.id);r.json({ok:true})});
 app.delete('/api/admin/bookings/:id',(q,r)=>{db.prepare('DELETE FROM bookings WHERE id=?').run(+q.params.id);r.json({ok:true})});
-const carIn=b=>{b=b||{};const c={name:String(b.name||'').trim().slice(0,60),cat:String(b.cat||''),tr:String(b.tr||''),seats:+b.seats,fuel:String(b.fuel||'').trim().slice(0,20),price:+b.price,color:/^#[0-9a-f]{6}$/i.test(b.color)?b.color:'#0e5a8a',active:b.active?1:0};
+const carIn=b=>{b=b||{};const c={name:s(b.name,60),cat:String(b.cat||''),tr:String(b.tr||''),seats:+b.seats,fuel:s(b.fuel,20),price:+b.price,color:/^#[0-9a-f]{6}$/i.test(b.color)?b.color:'#0a2540',active:b.active?1:0};
  return c.name&&['Ekonomik','Kompakt','SUV','Premium'].includes(c.cat)&&['Manuelni','Automatik'].includes(c.tr)&&c.seats>=1&&c.seats<=9&&c.price>0&&c.price<=2000&&c.fuel?c:null};
-app.get('/api/admin/cars',(q,r)=>r.json(db.prepare('SELECT * FROM cars ORDER BY id').all()));
+app.get('/api/admin/cars',(q,r)=>{const pm=photoMap();r.json(db.prepare('SELECT * FROM cars ORDER BY id').all().map(c=>({...c,photos:pm[c.id]||[]})))});
 app.post('/api/admin/cars',(q,r)=>{const c=carIn(q.body);if(!c)return bad(r,'Provjerite podatke o vozilu.');
  r.status(201).json({id:Number(db.prepare('INSERT INTO cars(name,cat,tr,seats,fuel,price,color,active) VALUES(@name,@cat,@tr,@seats,@fuel,@price,@color,@active)').run(c).lastInsertRowid)})});
 app.put('/api/admin/cars/:id',(q,r)=>{const c=carIn(q.body);if(!c)return bad(r,'Provjerite podatke o vozilu.');
@@ -53,4 +75,14 @@ app.put('/api/admin/cars/:id',(q,r)=>{const c=carIn(q.body);if(!c)return bad(r,'
 app.delete('/api/admin/cars/:id',(q,r)=>{const id=+q.params.id;
  if(db.prepare('SELECT 1 FROM bookings WHERE car_id=?').get(id)){db.prepare('UPDATE cars SET active=0 WHERE id=?').run(id);return r.json({note:'Vozilo ima rezervacije, pa je samo uklonjeno iz ponude.'})}
  db.prepare('DELETE FROM cars WHERE id=?').run(id);r.json({ok:true})});
-app.listen(process.env.PORT||3000,()=>console.log('Server radi na portu',process.env.PORT||3000));
+const up=multer({storage:multer.memoryStorage(),limits:{fileSize:3*1024*1024,files:5}});
+const sniff=b=>b[0]===0xFF&&b[1]===0xD8&&b[2]===0xFF?'image/jpeg':b.subarray(0,4).toString('hex')==='89504e47'?'image/png':b.subarray(0,4).toString()==='RIFF'&&b.subarray(8,12).toString()==='WEBP'?'image/webp':null;
+app.post('/api/admin/cars/:id/photos',(q,r)=>up.array('photos',5)(q,r,e=>{
+ if(e)return bad(r,e.code==='LIMIT_FILE_SIZE'?'Slika je veća od 3 MB.':'Najviše 5 slika odjednom.');
+ const id=+q.params.id,files=q.files||[];if(!db.prepare('SELECT 1 FROM cars WHERE id=?').get(id))return bad(r,'Vozilo nije pronađeno.',404);
+ const have=db.prepare('SELECT COUNT(*) n FROM car_photos WHERE car_id=?').get(id).n;
+ if(have+files.length>5)return bad(r,`Vozilo može imati najviše 5 fotografija (trenutno ${have}).`);
+ const types=files.map(f=>sniff(f.buffer));if(!files.length||types.includes(null))return bad(r,'Dozvoljene su samo JPG, PNG ili WebP slike.');
+ const ins=db.prepare('INSERT INTO car_photos(car_id,mime,data) VALUES(?,?,?)');files.forEach((f,i)=>ins.run(id,types[i],f.buffer));r.status(201).json({ok:true})}));
+app.delete('/api/admin/photos/:id',(q,r)=>{db.prepare('DELETE FROM car_photos WHERE id=?').run(+q.params.id);r.json({ok:true})});
+app.listen(process.env.PORT||3000,()=>console.log('IKI Rent a Car radi na portu',process.env.PORT||3000));

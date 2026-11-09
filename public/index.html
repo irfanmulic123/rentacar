@@ -3,19 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Primorje Rent a Car</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&display=swap">
+<title>IKI Rent a Car</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <a class="logo" href="#">Primorje<span>Rent a Car</span></a>
-  <nav><a href="#flota">Vozila</a><a href="#rezervacije">Moje rezervacije</a></nav>
-</header>
-
 <section class="hero">
-  <h1>Auto na obali,<br>spremno za sat vremena.</h1>
+  <header class="top">
+    <a class="logo" href="/"><b>IKI</b><span>Rent a Car</span></a>
+    <nav class="nav"><a href="#flota">Vozila</a><a href="#rezervacije">Moje rezervacije</a><span id="auth"></span></nav>
+  </header>
+  <h1>Izaberite datum.<br>Auto čeka vas.</h1>
   <form id="search" class="bar">
     <label>Preuzimanje
       <select id="loc"><option>Podgorica aerodrom</option><option>Budva</option><option>Kotor</option><option>Bar</option><option>Tivat aerodrom</option></select>
@@ -24,10 +22,9 @@
     <label>Do <input type="date" id="to" required></label>
     <button class="btn">Prikaži slobodna vozila</button>
   </form>
-  <p id="range-msg" class="note" role="status"></p>
 </section>
-
 <main>
+  <p id="range-msg" class="note" role="status"></p>
   <section id="flota">
     <div class="filters">
       <label>Kategorija <select id="f-cat"><option value="">Sve</option><option>Ekonomik</option><option>Kompakt</option><option>SUV</option><option>Premium</option></select></label>
@@ -36,26 +33,29 @@
     </div>
     <div id="grid" class="grid"></div>
   </section>
-
-  <section id="rezervacije">
-    <h2>Moje rezervacije</h2>
-    <div id="bookings"></div>
-  </section>
+  <section id="rezervacije"><h2>Moje rezervacije</h2><div id="bookings"></div></section>
 </main>
 
+<dialog id="adlg">
+  <form id="aform">
+    <h3 id="a-title"></h3><p class="note" id="a-hint"></p>
+    <label id="l-name">Ime i prezime<input name="name" autocomplete="name"></label>
+    <label>Email<input name="email" type="email" required autocomplete="email"></label>
+    <label>Lozinka<input name="password" type="password" required minlength="8" maxlength="100"></label>
+    <p id="a-err" class="err" role="alert"></p>
+    <div class="row"><button type="button" class="btn ghost" id="a-switch"></button><button class="btn" id="a-ok"></button></div>
+    <button type="button" class="lnk" id="a-close">Zatvori</button>
+  </form>
+</dialog>
 <dialog id="dlg">
-  <form id="book" method="dialog">
-    <h3 id="d-title"></h3>
-    <p id="d-sum" class="note"></p>
-    <label>Ime i prezime <input name="name" required autocomplete="name"></label>
-    <label>Email <input name="email" type="email" required autocomplete="email"></label>
+  <form id="book">
+    <h3 id="d-title"></h3><p id="d-sum" class="note"></p>
     <label>Telefon <input name="phone" type="tel" required autocomplete="tel"></label>
     <p id="d-err" class="err" role="alert"></p>
     <div class="row"><button type="button" class="btn ghost" id="d-cancel">Odustani</button><button class="btn">Potvrdi rezervaciju</button></div>
   </form>
 </dialog>
-
-<footer>© Primorje Rent a Car. <a href="admin.html">Admin</a></footer>
+<footer>© IKI Rent a Car · <a href="admin.html">Admin</a></footer>
 <script src="app.js"></script>
 </body>
 </html>

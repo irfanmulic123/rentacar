@@ -1,6 +1,6 @@
 {
- "name": "primorje-rentacar",
- "version": "2.0.0",
+ "name": "iki-rentacar",
+ "version": "3.0.0",
  "private": true,
  "main": "server.js",
  "scripts": {
@@ -10,6 +10,7 @@
   "node": ">=22.13"
  },
  "dependencies": {
-  "express": "^4.21.0"
+  "express": "^4.21.0",
+  "multer": "^2.0.2"
  }
 }

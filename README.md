@@ -1,4 +1,4 @@
-# Primorje Rent a Car
+# IKI Rent a Car
 
 Web aplikacija za iznajmljivanje automobila: Node.js, Express, SQLite (ugrađeni `node:sqlite`, Node 22.13+), frontend u čistom HTML/CSS/JS.
 
