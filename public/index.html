@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IKI Rent a Car</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,9 +16,11 @@
   </header>
   <h1>Izaberite datum.<br>Auto čeka vas.</h1>
   <form id="search" class="bar">
-    <label>Preuzimanje
-      <select id="loc"><option>Podgorica aerodrom</option><option>Budva</option><option>Kotor</option><option>Bar</option><option>Tivat aerodrom</option></select>
-    </label>
+    <div class="loc">
+      <p class="loc-h">Mjesto preuzimanja: <b id="loc-name"></b></p>
+      <div id="map" aria-label="Mapa mjesta preuzimanja"></div>
+      <div class="chips" id="chips" role="group" aria-label="Mjesta preuzimanja"></div>
+    </div>
     <label>Od <input type="date" id="from" required></label>
     <label>Do <input type="date" id="to" required></label>
     <button class="btn">Prikaži slobodna vozila</button>
@@ -56,6 +59,7 @@
   </form>
 </dialog>
 <footer>© IKI Rent a Car · <a href="admin.html">Admin</a></footer>
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

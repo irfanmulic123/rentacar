@@ -17,8 +17,9 @@ const chk=t=>{try{const[b,s]=String(t).split('.'),[k,id,e]=b.split('-');return D
 const pwh=(p,salt)=>crypto.scryptSync(p,salt,64).toString('hex');
 const tries=new Map(),blocked=(k,m)=>{const f=tries.get(k);return !!f&&Date.now()-f.t<9e5&&f.n>=m},fail=k=>{const f=tries.get(k);tries.set(k,f&&Date.now()-f.t<9e5?{n:f.n+1,t:f.t}:{n:1,t:Date.now()})};
 const app=express();app.set('trust proxy',1);
-app.use((q,r,n)=>{r.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'same-origin','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'"});n()});
-app.use(express.json({limit:'20kb'}));app.use(express.static(path.join(__dirname,'public')));
+app.use((q,r,n)=>{r.set({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'strict-origin-when-cross-origin','Content-Security-Policy':"default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://tile.openstreetmap.org; form-action 'self'; frame-ancestors 'none'"});n()});
+app.use(express.json({limit:'20kb'}));app.use('/vendor/leaflet',express.static(path.join(__dirname,'node_modules/leaflet/dist')));app.use(express.static(path.join(__dirname,'public')));
+const LOCS=['Podgorica aerodrom','Budva','Kotor','Bar','Tivat aerodrom'];
 const bad=(r,m,c=400)=>r.status(c).json({error:m}),DATE=/^\d{4}-\d{2}-\d{2}$/,nd=(a,b)=>Math.round((new Date(b)-new Date(a))/864e5)+1,s=(v,m)=>String(v||'').trim().slice(0,m);
 const taken=(car,f,t,x=0)=>db.prepare("SELECT 1 FROM bookings WHERE car_id=? AND status!='cancelled' AND id!=? AND NOT(to_date<? OR from_date>?)").get(car,x,f,t);
 const photoMap=()=>{const m={};for(const p of db.prepare('SELECT id,car_id FROM car_photos ORDER BY id').all())(m[p.car_id]??=[]).push(p.id);return m};
@@ -45,7 +46,8 @@ app.get('/api/cars',(q,r)=>{const{from,to}=q.query,k=DATE.test(from)&&DATE.test(
  r.json(db.prepare('SELECT * FROM cars WHERE active=1 ORDER BY price').all().map(c=>({...c,photos:pm[c.id]||[],busy:k?!!taken(c.id,from,to):false})))});
 app.get('/api/photos/:id',(q,r)=>{const p=db.prepare('SELECT mime,data FROM car_photos WHERE id=?').get(+q.params.id);if(!p)return r.sendStatus(404);r.set({'Content-Type':p.mime,'Cache-Control':'public, max-age=86400'}).send(Buffer.from(p.data))});
 app.post('/api/bookings',needUser,(q,r)=>{const b=q.body||{},phone=s(b.phone,30),loc=s(b.loc,60);
- if(phone.length<6||!loc)return bad(r,'Unesite ispravan broj telefona.');
+ if(!LOCS.includes(loc))return bad(r,'Izaberite mjesto preuzimanja.');
+ if(phone.length<6)return bad(r,'Unesite ispravan broj telefona.');
  if(!DATE.test(b.from)||!DATE.test(b.to)||b.to<b.from||b.from<new Date().toISOString().slice(0,10))return bad(r,'Datumi nisu ispravni.');
  const car=db.prepare('SELECT * FROM cars WHERE id=? AND active=1').get(+b.car_id);if(!car)return bad(r,'Vozilo nije dostupno.',404);
  const code=crypto.randomBytes(4).toString('hex').toUpperCase();
