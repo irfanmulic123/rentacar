@@ -10,12 +10,13 @@ const pin=on=>L.divIcon({className:'',html:`<div class="pin ${on?'on':''}"></div
 function pickLoc(n){loc=n;$('#loc-name').textContent=n;document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c.dataset.loc===n));for(const k in markers)markers[k].setIcon(pin(k===n))}
 $('#chips').innerHTML=LOCS.map(l=>`<button type="button" class="chip" data-loc="${l[0]}">${l[0]}</button>`).join('');
 $('#chips').addEventListener('click',e=>{if(e.target.dataset.loc)pickLoc(e.target.dataset.loc)});
-if(window.L){const map=L.map('map',{scrollWheelZoom:false});
+let map;if(window.L){map=L.map('map',{scrollWheelZoom:false});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
   map.fitBounds(LOCS.map(l=>[l[1],l[2]]),{padding:[30,30]});
   LOCS.forEach(l=>{markers[l[0]]=L.marker([l[1],l[2]],{icon:pin(false),title:l[0],alt:l[0]}).addTo(map).on('click',()=>pickLoc(l[0]))})}
 else $('#map').hidden=true;
 pickLoc(loc);
+$('#loc-btn').addEventListener('click',()=>{const p=$('#loc-panel'),open=p.hidden;p.hidden=!open;$('#loc-btn').setAttribute('aria-expanded',open);if(open&&map){map.invalidateSize();map.fitBounds(LOCS.map(l=>[l[1],l[2]]),{padding:[30,30]})}});
 $('#from').min=$('#to').min=new Date().toISOString().slice(0,10);
 const valid=()=>{const f=$('#from').value,t=$('#to').value;return f&&t&&t>=f?{f,t,n:days(f,t)}:null};
 async function loadCars(){const r=valid();try{CARS=await api('/api/cars'+(r?`?from=${r.f}&to=${r.t}`:''))}catch(e){$('#grid').innerHTML=`<p class="err">${esc(e.message)}</p>`;return}render()}

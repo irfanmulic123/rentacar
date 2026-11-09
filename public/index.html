@@ -9,26 +9,46 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<section class="hero">
+<div class="hero">
   <header class="top">
-    <a class="logo" href="/"><b>IKI</b><span>Rent a Car</span></a>
+    <a class="logo" href="/">IKI Rent a Car</a>
     <nav class="nav"><a href="#flota">Vozila</a><a href="#rezervacije">Moje rezervacije</a><span id="auth"></span></nav>
   </header>
-  <h1>Izaberite datum.<br>Auto čeka vas.</h1>
-  <form id="search" class="bar">
-    <div class="loc">
-      <p class="loc-h">Mjesto preuzimanja: <b id="loc-name"></b></p>
-      <div id="map" aria-label="Mapa mjesta preuzimanja"></div>
-      <div class="chips" id="chips" role="group" aria-label="Mjesta preuzimanja"></div>
-    </div>
-    <label>Od <input type="date" id="from" required></label>
-    <label>Do <input type="date" id="to" required></label>
-    <button class="btn">Prikaži slobodna vozila</button>
-  </form>
-</section>
+  <div class="hero-in">
+    <h1>IKI Rent a Car</h1>
+    <p class="sub">Izaberite mjesto i datume. Auto vas čeka.</p>
+    <form id="search" class="bar">
+      <div class="f"><span id="loc-l">Lokacija preuzimanja</span>
+        <button type="button" id="loc-btn" class="sel" aria-expanded="false" aria-controls="loc-panel" aria-labelledby="loc-l loc-name"><span id="loc-name"></span></button></div>
+      <label class="f">Datum preuzimanja <input type="date" id="from" required></label>
+      <label class="f">Datum vraćanja <input type="date" id="to" required></label>
+      <button class="btn pill">Pretraži</button>
+      <div class="loc" id="loc-panel" hidden>
+        <div id="map" aria-label="Mapa mjesta preuzimanja"></div>
+        <div class="chips" id="chips" role="group" aria-label="Mjesta preuzimanja"></div>
+      </div>
+    </form>
+  </div>
+</div>
 <main>
-  <p id="range-msg" class="note" role="status"></p>
+  <section class="intro">
+    <article class="ic ic-l">
+      <h2>Trebate auto u Crnoj Gori?</h2>
+      <p>Izaberite mjesto preuzimanja na mapi, odaberite datume i rezervišite vozilo u nekoliko koraka. Sve rezervacije vidite na svom nalogu.</p>
+      <a class="btn wide" href="#flota">Pogledajte vozila</a>
+    </article>
+    <article class="ic ic-r">
+      <h2>Zašto IKI Rent a Car</h2>
+      <ul>
+        <li>Slobodna vozila za vaše datume vidite odmah</li>
+        <li>Preuzimanje u Podgorici, Budvi, Kotoru, Baru i Tivtu</li>
+        <li>Rezervacija preko naloga, otkazivanje jednim klikom</li>
+        <li>Cijena za cijeli period prikazana prije potvrde</li>
+      </ul>
+    </article>
+  </section>
   <section id="flota">
+    <p id="range-msg" class="note" role="status"></p>
     <div class="filters">
       <label>Kategorija <select id="f-cat"><option value="">Sve</option><option>Ekonomik</option><option>Kompakt</option><option>SUV</option><option>Premium</option></select></label>
       <label>Mjenjač <select id="f-tr"><option value="">Svi</option><option>Manuelni</option><option>Automatik</option></select></label>
