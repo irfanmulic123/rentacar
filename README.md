@@ -1,11 +1,20 @@
 # Primorje Rent a Car
 
-Statička web aplikacija za iznajmljivanje automobila (HTML, CSS, JavaScript, bez backend-a).
+Web aplikacija za iznajmljivanje automobila: Node.js, Express, SQLite (`better-sqlite3`), frontend u čistom HTML/CSS/JS.
 
-Funkcije: katalog vozila, filteri (kategorija, mjenjač, cijena), izbor datuma, provjera zauzetosti, ukupna cijena, rezervacija i otkazivanje. Rezervacije se čuvaju u `localStorage`.
+## Funkcije
+- Katalog vozila, filteri, izbor datuma, ukupna cijena, provjera zauzetosti (na serveru, u transakciji).
+- Rezervacija sa šifrom; gost vidi i otkazuje svoje rezervacije.
+- Admin panel (`/admin.html`): pregled i promjena statusa rezervacija, brisanje, dodavanje/uređivanje/sakrivanje vozila.
 
 ## Pokretanje
-Otvorite `index.html` u pretraživaču ili pokrenite `python3 -m http.server`.
+```bash
+npm install
+ADMIN_PASSWORD="vasa-jaka-lozinka" npm start
+```
+Aplikacija: http://localhost:3000, admin: http://localhost:3000/admin.html
 
-## Objava na GitHub Pages
-Settings → Pages → Branch: `main` / root.
+Promjenljive okruženja: `ADMIN_PASSWORD` (obavezno u produkciji), `SECRET` (potpis admin tokena), `PORT`, `DB_PATH` (putanja do SQLite fajla).
+
+## Objava (npr. Render)
+GitHub Pages ne podržava backend. Na Render.com napravite **Web Service** iz ovog repozitorijuma (Build: `npm install`, Start: `npm start`), postavite `ADMIN_PASSWORD` i `SECRET`, i dodajte **Persistent Disk** (npr. mount `/data`, `DB_PATH=/data/rentacar.db`). Bez diska se baza briše pri svakom redeploy-u.
