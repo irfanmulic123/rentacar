@@ -1,6 +1,6 @@
-const express=require('express'),Database=require('better-sqlite3'),crypto=require('crypto'),path=require('path');
-const db=new Database(process.env.DB_PATH||path.join(__dirname,'rentacar.db'));
-db.pragma('journal_mode = WAL');db.pragma('foreign_keys = ON');
+const express=require('express'),{DatabaseSync}=require('node:sqlite'),crypto=require('crypto'),path=require('path');
+const db=new DatabaseSync(process.env.DB_PATH||path.join(__dirname,'rentacar.db'));
+db.exec('PRAGMA journal_mode = WAL;PRAGMA foreign_keys = ON;');
 db.exec(`CREATE TABLE IF NOT EXISTS cars(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,cat TEXT NOT NULL,tr TEXT NOT NULL,seats INTEGER NOT NULL,fuel TEXT NOT NULL,price REAL NOT NULL,color TEXT NOT NULL DEFAULT '#0e5a8a',active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS bookings(id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT UNIQUE NOT NULL,car_id INTEGER NOT NULL REFERENCES cars(id),from_date TEXT NOT NULL,to_date TEXT NOT NULL,loc TEXT NOT NULL,total REAL NOT NULL,name TEXT NOT NULL,email TEXT NOT NULL,phone TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'confirmed',created TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE INDEX IF NOT EXISTS ix_b ON bookings(car_id,from_date,to_date)`);
@@ -25,8 +25,8 @@ app.post('/api/bookings',(q,r)=>{const b=q.body||{},s=(v,m)=>String(v||'').trim(
  if(!DATE.test(b.from)||!DATE.test(b.to)||b.to<b.from||b.from<new Date().toISOString().slice(0,10))return bad(r,'Datumi nisu ispravni.');
  const car=db.prepare('SELECT * FROM cars WHERE id=? AND active=1').get(+b.car_id);if(!car)return bad(r,'Vozilo nije dostupno.',404);
  const code=crypto.randomBytes(4).toString('hex').toUpperCase();
- try{db.transaction(()=>{if(taken(car.id,b.from,b.to))throw new Error('busy');
-  db.prepare('INSERT INTO bookings(code,car_id,from_date,to_date,loc,total,name,email,phone) VALUES(?,?,?,?,?,?,?,?,?)').run(code,car.id,b.from,b.to,loc,car.price*nd(b.from,b.to),name,email,phone)})()}
+ try{db.exec('BEGIN IMMEDIATE');try{if(taken(car.id,b.from,b.to))throw new Error('busy');
+  db.prepare('INSERT INTO bookings(code,car_id,from_date,to_date,loc,total,name,email,phone) VALUES(?,?,?,?,?,?,?,?,?)').run(code,car.id,b.from,b.to,loc,car.price*nd(b.from,b.to),name,email,phone);db.exec('COMMIT')}catch(e){db.exec('ROLLBACK');throw e}}
  catch(e){return e.message==='busy'?bad(r,'Vozilo je zauzeto u izabranom periodu.',409):bad(r,'Greška na serveru.',500)}
  r.status(201).json(pub(db.prepare(BK+' WHERE code=?').get(code)))});
 app.get('/api/bookings/:code',(q,r)=>{const b=db.prepare(BK+' WHERE code=?').get(q.params.code);b?r.json(pub(b)):bad(r,'Nije pronađeno.',404)});
@@ -47,7 +47,7 @@ const carIn=b=>{b=b||{};const c={name:String(b.name||'').trim().slice(0,60),cat:
  return c.name&&['Ekonomik','Kompakt','SUV','Premium'].includes(c.cat)&&['Manuelni','Automatik'].includes(c.tr)&&c.seats>=1&&c.seats<=9&&c.price>0&&c.price<=2000&&c.fuel?c:null};
 app.get('/api/admin/cars',(q,r)=>r.json(db.prepare('SELECT * FROM cars ORDER BY id').all()));
 app.post('/api/admin/cars',(q,r)=>{const c=carIn(q.body);if(!c)return bad(r,'Provjerite podatke o vozilu.');
- r.status(201).json({id:db.prepare('INSERT INTO cars(name,cat,tr,seats,fuel,price,color,active) VALUES(@name,@cat,@tr,@seats,@fuel,@price,@color,@active)').run(c).lastInsertRowid})});
+ r.status(201).json({id:Number(db.prepare('INSERT INTO cars(name,cat,tr,seats,fuel,price,color,active) VALUES(@name,@cat,@tr,@seats,@fuel,@price,@color,@active)').run(c).lastInsertRowid)})});
 app.put('/api/admin/cars/:id',(q,r)=>{const c=carIn(q.body);if(!c)return bad(r,'Provjerite podatke o vozilu.');
  db.prepare('UPDATE cars SET name=@name,cat=@cat,tr=@tr,seats=@seats,fuel=@fuel,price=@price,color=@color,active=@active WHERE id=@id').run({...c,id:+q.params.id});r.json({ok:true})});
 app.delete('/api/admin/cars/:id',(q,r)=>{const id=+q.params.id;

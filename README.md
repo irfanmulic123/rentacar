@@ -1,6 +1,6 @@
 # Primorje Rent a Car
 
-Web aplikacija za iznajmljivanje automobila: Node.js, Express, SQLite (`better-sqlite3`), frontend u čistom HTML/CSS/JS.
+Web aplikacija za iznajmljivanje automobila: Node.js, Express, SQLite (ugrađeni `node:sqlite`, Node 22.13+), frontend u čistom HTML/CSS/JS.
 
 ## Funkcije
 - Katalog vozila, filteri, izbor datuma, ukupna cijena, provjera zauzetosti (na serveru, u transakciji).
